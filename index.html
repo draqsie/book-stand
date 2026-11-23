@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>book-stand</title>
+  <meta name="description" content="book-stand: iPad için sade ders çalışma uygulaması. PDF kitaplar, kalemle not, defter, yanlış defteri ve gün sonu raporu.">
+  <meta name="theme-color" content="#f6efe6">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="book-stand">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/app.css">
+  <script>
+    // Tema, ilk boyamadan önce uygulanır (göz kırpmayı önler).
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('book-stand:settings') || '{}');
+        var mode = s.mode || 'system';
+        var dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? (s.darkTheme || 'kutuphane') : (s.lightTheme || 'latte');
+        if (dark) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+  </script>
+  <script type="module" src="./js/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="appbar">
+      <a class="brand" href="#/" aria-label="book-stand ana sayfa">
+        <img src="./icons/icon.svg" alt="" width="30" height="30">
+        <span>book-stand</span>
+      </a>
+      <nav class="appnav" aria-label="Ana gezinme">
+        <a href="#/" data-nav="home" data-icon="book">Dersler</a>
+        <a href="#/rapor" data-nav="rapor" data-icon="chart">Gün sonu</a>
+        <a href="#/ayarlar" data-nav="ayarlar" data-icon="settings">Ayarlar</a>
+      </nav>
+    </header>
+    <main id="main" tabindex="-1">
+      <div class="loading"><div class="spinner"></div></div>
+    </main>
+  </div>
+  <noscript>book-stand çalışmak için JavaScript gerektirir.</noscript>
+</body>
+</html>

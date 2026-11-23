@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "book-stand",
+  "short_name": "book-stand",
+  "description": "iPad için sade ders çalışma uygulaması: PDF kitaplar, kalemle not, defter, yanlış defteri ve gün sonu raporu.",
+  "lang": "tr",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6efe6",
+  "theme_color": "#f6efe6",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

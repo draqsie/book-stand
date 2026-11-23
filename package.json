@@ -1,0 +1,17 @@
+{
+  "name": "book-stand",
+  "version": "1.0.0",
+  "private": true,
+  "description": "book-stand: iPad için ders çalışma PWA'sı",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/serve.mjs",
+    "build": "node tools/build.mjs",
+    "check": "node tools/build.mjs && node tools/check-deploy.mjs _site",
+    "preview": "node tools/build.mjs && node tools/serve.mjs _site",
+    "vendor": "node tools/vendor-pdfjs.mjs"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "4.10.38"
+  }
+}
