@@ -132,6 +132,6 @@ export async function renderNotebook(main, { courseId }, query) {
     window.removeEventListener('resize', onResize);
     io.disconnect();
     for (const it of items.values()) it.layer.unmount();
-    ctrl.hideLive();
+    ctrl.destroy();
   };
 }

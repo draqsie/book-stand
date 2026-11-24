@@ -75,7 +75,15 @@ export async function renderRegion(doc, pageNum, rect, strokes = []) {
   ctx.fillRect(0, 0, full.width, full.height);
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
   const k = full.width / UNITS;
-  drawStrokes(ctx, strokes, k);
+  if (strokes.length) {
+    // Mürekkebi ayrı tuvalde çiz: piksel silgisi yalnızca mürekkebi silsin, PDF'i değil.
+    const ink = document.createElement('canvas');
+    ink.width = full.width;
+    ink.height = full.height;
+    drawStrokes(ink.getContext('2d'), strokes, k);
+    ctx.drawImage(ink, 0, 0);
+    ink.width = ink.height = 0;
+  }
   const crop = document.createElement('canvas');
   crop.width = Math.max(1, Math.round(rect.w * k));
   crop.height = Math.max(1, Math.round(rect.h * k));

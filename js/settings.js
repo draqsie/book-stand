@@ -9,6 +9,8 @@ const DEFAULTS = {
   penColor: '#2b2b2b',
   penSize: 2,
   hlColor: '#ffd54a',
+  eraserMode: 'object', // 'object' (nesne silgisi) | 'pixel' (piksel silgisi)
+  eraserSize: 28,
   tool: 'hand',
   zoom: 1,
   dimPdf: false,

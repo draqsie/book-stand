@@ -1,12 +1,15 @@
 // Kalem/vurgulayıcı/silgi motoru. Pointer Events ile Apple Pencil ve parmak girişini işler.
 // Koordinatlar "sayfa birimi"nde saklanır: sayfa genişliği = 1000 birim. Böylece yakınlaştırma
 // düzeyinden bağımsızdır.
+//
+// Çizgi türleri (t): 'pen' kalem, 'hl' vurgulayıcı, 'er' piksel silgisi (altındaki mürekkebi siler).
 import { getInk, saveInk } from './store.js';
 import { debouncedSaver, setBusy } from './savestate.js';
-import { getSettings, setSettings } from './settings.js';
+import { getSettings, setSettings, onSettings } from './settings.js';
 
 export const UNITS = 1000;
 const MAX_CANVAS_AREA = 16_000_000; // iPad Safari tuval sınırı (~16.7M piksel)
+export const ERASER_SIZES = [14, 28, 52]; // piksel silgisi çapı (sayfa birimi)
 
 export function canvasScale(cssW, cssH) {
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -16,16 +19,21 @@ export function canvasScale(cssW, cssH) {
 
 const pf = (pr) => 0.6 + 0.8 * pr; // basınç → kalınlık çarpanı
 
+function styleFor(ctx, s) {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = s.c;
+  ctx.fillStyle = s.c;
+  if (s.t === 'er') ctx.globalCompositeOperation = 'destination-out';
+}
+
 /** Bir çizgiyi verilen bağlama çizer. k = piksel / birim */
 export function drawStroke(ctx, s, k) {
   const p = s.p;
   const n = p.length / 3;
   if (!n) return;
   ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = s.c;
-  ctx.fillStyle = s.c;
+  styleFor(ctx, s);
   if (s.t === 'hl') {
     ctx.globalAlpha = 0.35;
     ctx.lineWidth = s.s * k;
@@ -38,16 +46,18 @@ export function drawStroke(ctx, s, k) {
     }
     if (n > 1) ctx.lineTo(p[(n - 1) * 3] * k, p[(n - 1) * 3 + 1] * k);
     ctx.stroke();
+  } else if (n === 1) {
+    dot(ctx, s, k);
   } else {
-    if (n === 1) {
-      ctx.beginPath();
-      ctx.arc(p[0] * k, p[1] * k, (s.s * pf(p[2]) * k) / 2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      for (let j = 1; j < n; j++) penSegment(ctx, p, j, n, s.s, k);
-    }
+    for (let j = 1; j < n; j++) penSegment(ctx, p, j, n, s.s, k);
   }
   ctx.restore();
+}
+
+function dot(ctx, s, k) {
+  ctx.beginPath();
+  ctx.arc(s.p[0] * k, s.p[1] * k, (s.s * pf(s.p[2]) * k) / 2, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // j. parçayı çiz (1 ≤ j ≤ n-1). Son parça düz çizgi ile biter.
@@ -116,6 +126,8 @@ export class InkLayer {
     this.controller = controller;
     this.strokes = null;
     this.canvas = null;
+    this.mounted = false;
+    this.rect = null; // çizim sırasında önbelleğe alınan konum
     this.saver = debouncedSaver(`ink:${ownerId}:${page}`, () => saveInk(ownerId, page, this.strokes || []));
     el._layer = this;
   }
@@ -125,17 +137,26 @@ export class InkLayer {
     return this.strokes;
   }
 
+  /** Sayfa görünür oldu. Tuval yalnızca sayfada mürekkep varsa oluşturulur (bellek ve kaydırma akıcılığı için). */
   async mount() {
     await this.load();
+    this.mounted = true;
+    if (this.strokes.length) this.ensureCanvas();
+    else this.resize();
+  }
+
+  ensureCanvas() {
     if (!this.canvas) {
       this.canvas = document.createElement('canvas');
       this.canvas.className = 'ink-canvas';
-      this.el.append(this.canvas);
+      this.el.prepend(this.canvas);
+      this.resize();
     }
-    this.resize();
+    return this.canvas;
   }
 
   unmount() {
+    this.mounted = false;
     if (!this.canvas) return;
     this.canvas.width = this.canvas.height = 0; // Safari'de belleği hemen bırak
     this.canvas.remove();
@@ -164,7 +185,7 @@ export class InkLayer {
   changed() { this.saver.schedule(); }
 
   toUnits(clientX, clientY) {
-    const r = this.el.getBoundingClientRect();
+    const r = this.rect || this.el.getBoundingClientRect();
     const s = UNITS / r.width;
     return [(clientX - r.left) * s, (clientY - r.top) * s];
   }
@@ -185,13 +206,24 @@ export class InkController {
     this.penColor = st.penColor;
     this.penSize = st.penSize;
     this.hlColor = st.hlColor;
+    this.eraserMode = st.eraserMode === 'pixel' ? 'pixel' : 'object';
+    this.eraserSize = ERASER_SIZES.includes(st.eraserSize) ? st.eraserSize : ERASER_SIZES[1];
     this.history = [];
     this.active = null; // devam eden işlem
     this.penActive = false;
     this.lastPenUp = 0;
     this.live = null;
+    this.frame = 0;
     this.listeners = new Set();
+    this.offSettings = onSettings(() => this.applyToolClass());
     this.applyToolClass();
+  }
+
+  destroy() {
+    this.offSettings?.();
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.hideLive();
+    this.listeners.clear();
   }
 
   onChange(fn) { this.listeners.add(fn); }
@@ -210,92 +242,100 @@ export class InkController {
     this.emit();
   }
   setHl(color) { this.hlColor = color; setSettings({ hlColor: color }); this.emit(); }
+  setEraser(mode, size) {
+    if (mode) this.eraserMode = mode;
+    if (size) this.eraserSize = size;
+    setSettings({ eraserMode: this.eraserMode, eraserSize: this.eraserSize });
+    this.emit();
+  }
+
+  /** Parmak yalnızca kaydırıyorsa sayfa tarayıcının kendi (akıcı, ataletli) kaydırmasını kullanır. */
+  fingerScrolls() { return !getSettings().fingerDraws; }
 
   applyToolClass() {
     this.root.classList.remove('tool-hand', 'tool-pen', 'tool-hl', 'tool-eraser', 'tool-select');
     this.root.classList.add(`tool-${this.tool}`);
+    this.root.classList.toggle('finger-scrolls', this.fingerScrolls());
   }
 
   /** Bir .ink öğesine işaretçi dinleyicilerini bağlar. */
   bind(layer) {
     const el = layer.el;
     el.addEventListener('pointerdown', (e) => this.down(layer, e));
-    el.addEventListener('pointermove', (e) => this.move(layer, e));
-    el.addEventListener('pointerup', (e) => this.up(layer, e));
-    el.addEventListener('pointercancel', (e) => this.up(layer, e, true));
-    // iPadOS'ta kalemle yazarken sayfanın kaymasını / büyüteç açılmasını engelle.
-    const stop = (e) => { if (this.tool !== 'hand') e.preventDefault(); };
-    el.addEventListener('touchstart', stop, { passive: false });
-    el.addEventListener('touchmove', stop, { passive: false });
+    el.addEventListener('pointermove', (e) => this.move(e));
+    el.addEventListener('pointerup', (e) => this.up(e));
+    el.addEventListener('pointercancel', (e) => this.up(e, true));
+    // iPadOS: kalem dokunuşlarında (ve parmakla çizimde) kaydırmayı/büyüteci engelle.
+    // Parmak yalnızca kaydırıyorsa dokunuşu tarayıcıya bırak: kaydırma yerel ve akıcı olur.
+    const onTouch = (e) => {
+      if (this.tool === 'hand') return;
+      const stylus = [...e.touches, ...e.changedTouches].some((t) => t.touchType === 'stylus');
+      const palm = this.penActive || Date.now() - this.lastPenUp < 350 || (this.active && this.active.pen);
+      if (stylus || palm || !this.fingerScrolls()) e.preventDefault();
+    };
+    el.addEventListener('touchstart', onTouch, { passive: false });
+    el.addEventListener('touchmove', onTouch, { passive: false });
   }
 
   down(layer, e) {
     if (this.tool === 'hand') return;
-    const st = getSettings();
-    if (e.pointerType === 'pen' && !st.penSeen) {
+    const isPen = e.pointerType === 'pen';
+    const isTouch = e.pointerType === 'touch';
+    if (isPen && !getSettings().penSeen) {
       setSettings({ penSeen: true, fingerDraws: false });
       this.onToast?.('Apple Pencil algılandı: kalemle yazın, parmakla kaydırın. (Araç çubuğundan değiştirilebilir)');
       this.emit();
     }
-    if (this.active) {
-      // Kalemle yazarken avuç içi dokunuşlarını yok say.
-      return;
-    }
-    const isTouch = e.pointerType === 'touch';
-    if (isTouch && (this.penActive || Date.now() - this.lastPenUp < 400)) return;
-    if (isTouch && !getSettings().fingerDraws) {
-      this.active = { type: 'pan', id: e.pointerId, x: e.clientX, y: e.clientY, sl: this.scroller.scrollLeft, st: this.scroller.scrollTop };
-      layer.el.setPointerCapture?.(e.pointerId);
-      return;
-    }
+    if (this.active) return; // yazarken ikinci dokunuşu (avuç içi) yok say
+    if (isTouch && (this.penActive || Date.now() - this.lastPenUp < 350)) return;
+    if (isTouch && this.fingerScrolls()) return; // kaydırmayı tarayıcı yapar
     if (!layer.strokes) return; // henüz yüklenmedi
     e.preventDefault();
     layer.el.setPointerCapture?.(e.pointerId);
-    if (e.pointerType === 'pen') this.penActive = true;
+    if (isPen) this.penActive = true;
+    layer.rect = layer.el.getBoundingClientRect();
     const [x, y] = layer.toUnits(e.clientX, e.clientY);
+    const pr = isPen && e.pressure > 0 ? e.pressure : 0.5;
 
-    if (this.tool === 'pen' || this.tool === 'hl') {
+    const pixelEraser = this.tool === 'eraser' && this.eraserMode === 'pixel';
+    if (this.tool === 'pen' || this.tool === 'hl' || pixelEraser) {
       setBusy(true);
-      const isHl = this.tool === 'hl';
-      const pr = e.pointerType === 'pen' && e.pressure > 0 ? e.pressure : 0.5;
-      const stroke = { t: isHl ? 'hl' : 'pen', c: isHl ? this.hlColor : this.penColor, s: isHl ? 22 : this.penSize * 1.4, p: [r1(x), r1(y), Math.round(pr * 100) / 100] };
-      this.active = { type: 'draw', id: e.pointerId, layer, stroke, pen: e.pointerType === 'pen' };
-      if (isHl) this.showLive(layer);
+      let stroke;
+      if (pixelEraser) stroke = { t: 'er', c: '#000', s: this.eraserSize, p: [r1(x), r1(y), 0.5] };
+      else if (this.tool === 'hl') stroke = { t: 'hl', c: this.hlColor, s: 22, p: [r1(x), r1(y), 0.5] };
+      else stroke = { t: 'pen', c: this.penColor, s: this.penSize * 1.4, p: [r1(x), r1(y), Math.round(pr * 100) / 100] };
+      this.active = { type: 'draw', id: e.pointerId, layer, stroke, pen: isPen, drawn: 0 };
+      if (stroke.t === 'hl') this.showLive(layer);
+      else layer.ensureCanvas();
       this.paintActive();
     } else if (this.tool === 'eraser') {
       setBusy(true);
-      this.active = { type: 'erase', id: e.pointerId, layer, removed: [], lx: x, ly: y };
+      this.active = { type: 'erase', id: e.pointerId, layer, removed: [], lx: x, ly: y, pen: isPen };
       this.eraseAt(layer, x, y);
     } else if (this.tool === 'select') {
       const box = document.createElement('div');
       box.className = 'select-box';
       layer.el.append(box);
-      this.active = { type: 'select', id: e.pointerId, layer, x0: x, y0: y, x1: x, y1: y, box };
+      this.active = { type: 'select', id: e.pointerId, layer, x0: x, y0: y, x1: x, y1: y, box, pen: isPen };
       this.updateSelectBox();
     }
   }
 
-  move(layer, e) {
+  move(e) {
     const a = this.active;
     if (!a || a.id !== e.pointerId) return;
     e.preventDefault();
-    if (a.type === 'pan') {
-      this.scroller.scrollLeft = a.sl - (e.clientX - a.x);
-      this.scroller.scrollTop = a.st - (e.clientY - a.y);
-      return;
-    }
-    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+    const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
     const list = events.length ? events : [e];
     if (a.type === 'draw') {
+      const p = a.stroke.p;
+      const usePressure = a.pen && a.stroke.t === 'pen';
       for (const ev of list) {
         const [x, y] = a.layer.toUnits(ev.clientX, ev.clientY);
-        const p = a.stroke.p;
-        const lx = p[p.length - 3], ly = p[p.length - 2];
-        if (Math.hypot(x - lx, y - ly) < 0.8) continue;
-        const pr = a.pen && ev.pressure > 0 ? ev.pressure : 0.5;
+        if (Math.hypot(x - p[p.length - 3], y - p[p.length - 2]) < 0.8) continue;
+        const pr = usePressure && ev.pressure > 0 ? ev.pressure : 0.5;
         p.push(r1(x), r1(y), Math.round(pr * 100) / 100);
       }
-      this.paintActive();
     } else if (a.type === 'erase') {
       for (const ev of list) {
         const [x, y] = a.layer.toUnits(ev.clientX, ev.clientY);
@@ -307,32 +347,46 @@ export class InkController {
     } else if (a.type === 'select') {
       const [x, y] = a.layer.toUnits(e.clientX, e.clientY);
       a.x1 = x; a.y1 = y;
-      this.updateSelectBox();
     }
+    // Ekranı her olayda değil, karede bir kez güncelle (Apple Pencil saniyede 240 olay üretebilir).
+    if (!this.frame) this.frame = requestAnimationFrame(() => this.flushFrame());
   }
 
-  up(layer, e, cancelled = false) {
+  flushFrame() {
+    this.frame = 0;
+    const a = this.active;
+    if (!a) return;
+    if (a.type === 'draw') this.paintActive();
+    else if (a.type === 'erase' && a.dirty) { a.dirty = false; a.layer.redraw(); }
+    else if (a.type === 'select') this.updateSelectBox();
+  }
+
+  up(e, cancelled = false) {
     const a = this.active;
     if (e.pointerType === 'pen') { this.penActive = false; this.lastPenUp = Date.now(); }
     if (!a || a.id !== e.pointerId) return;
+    if (this.frame) { cancelAnimationFrame(this.frame); this.frame = 0; }
+    this.flushFrame();
     this.active = null;
-    if (a.type === 'pan') return;
+    a.layer.rect = null;
     if (a.type === 'draw') {
       setBusy(false);
       this.hideLive();
       const L = a.layer;
-      L.strokes.push(a.stroke);
-      // Son parçayı da içeren tam çizgiyi ana tuvale çiz.
-      if (a.stroke.t === 'hl' || a.stroke.p.length <= 6) {
-        if (L.canvas) drawStroke(L.canvas.getContext('2d'), a.stroke, L.k);
-      } else if (L.canvas) {
-        const n = a.stroke.p.length / 3;
-        const ctx = L.canvas.getContext('2d');
-        ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = a.stroke.c;
-        penSegment(ctx, a.stroke.p, n - 1, n, a.stroke.s, L.k);
+      const s = a.stroke;
+      L.strokes.push(s);
+      const canvas = L.ensureCanvas();
+      const ctx = canvas.getContext('2d');
+      if (s.t === 'hl' || s.p.length <= 6) {
+        drawStroke(ctx, s, L.k);
+      } else {
+        // Kalem/piksel silgisi: son parçayı da çiz (öncekiler çizim sırasında çizildi).
+        const n = s.p.length / 3;
+        ctx.save(); styleFor(ctx, s);
+        penSegment(ctx, s.p, n - 1, n, s.s, L.k);
         ctx.restore();
       }
-      this.history.push({ type: 'add', layer: L, stroke: a.stroke });
+      this.history.push({ type: 'add', layer: L, stroke: s });
       L.changed();
       this.emit();
     } else if (a.type === 'erase') {
@@ -352,6 +406,7 @@ export class InkController {
 
   updateSelectBox() {
     const a = this.active;
+    if (!a || a.type !== 'select') return;
     const k = a.layer.el.clientWidth / UNITS;
     Object.assign(a.box.style, {
       left: `${Math.min(a.x0, a.x1) * k}px`, top: `${Math.min(a.y0, a.y1) * k}px`,
@@ -359,28 +414,27 @@ export class InkController {
     });
   }
 
-  // Kalem: ana tuvale parça parça çiz. Vurgulayıcı: geçici tuvalde tüm çizgiyi yeniden çiz.
+  // Kalem ve piksel silgisi: ana tuvale yalnızca yeni parçaları çiz.
+  // Vurgulayıcı: saydamlık üst üste binmesin diye geçici tuvalde tüm çizgiyi yeniden çiz.
   paintActive() {
     const a = this.active;
-    const L = a.layer;
-    if (a.stroke.t === 'hl') {
+    const s = a.stroke;
+    if (s.t === 'hl') {
       if (!this.live) return;
       const ctx = this.live.getContext('2d');
       ctx.clearRect(0, 0, this.live.width, this.live.height);
-      drawStroke(ctx, a.stroke, this.live.width / UNITS);
+      drawStroke(ctx, s, this.live.width / UNITS);
       return;
     }
+    const L = a.layer;
     if (!L.canvas) return;
     const ctx = L.canvas.getContext('2d');
-    const p = a.stroke.p;
+    const p = s.p;
     const n = p.length / 3;
-    a.drawn ||= 0;
-    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = a.stroke.c; ctx.fillStyle = a.stroke.c;
-    if (n === 1 && !a.drawn) {
-      ctx.beginPath(); ctx.arc(p[0] * L.k, p[1] * L.k, (a.stroke.s * pf(p[2]) * L.k) / 2, 0, Math.PI * 2); ctx.fill();
-    }
+    ctx.save(); styleFor(ctx, s);
+    if (n === 1 && !a.dotted) { dot(ctx, s, L.k); a.dotted = true; }
     // n-2'ye kadar olan parçalar kesinleşmiştir (bir sonraki noktayı bilir).
-    for (let j = a.drawn + 1; j <= n - 2; j++) penSegment(ctx, p, j, n, a.stroke.s, L.k);
+    for (let j = a.drawn + 1; j <= n - 2; j++) penSegment(ctx, p, j, n, s.s, L.k);
     a.drawn = Math.max(a.drawn, n - 2);
     ctx.restore();
   }
@@ -399,19 +453,19 @@ export class InkController {
     if (this.live?.parentNode) this.live.remove();
   }
 
+  // Nesne silgisi: dokunduğu çizginin tamamını siler.
   eraseAt(layer, x, y) {
     const a = this.active;
     const r = 10;
-    let changed = false;
     for (let i = layer.strokes.length - 1; i >= 0; i--) {
       const s = layer.strokes[i];
+      if (s.t === 'er') continue; // piksel silgisi izleri nesne değildir
       if (hits(s, x, y, r)) {
         layer.strokes.splice(i, 1);
         a.removed.push({ stroke: s, index: i });
-        changed = true;
+        a.dirty = true;
       }
     }
-    if (changed) layer.redraw();
   }
 
   canUndo() { return this.history.length > 0; }
@@ -426,6 +480,7 @@ export class InkController {
     } else if (op.type === 'erase') {
       for (const { stroke, index } of [...op.removed].reverse()) L.strokes.splice(Math.min(index, L.strokes.length), 0, stroke);
     }
+    if (L.mounted && L.strokes.length) L.ensureCanvas();
     L.redraw();
     L.changed();
     this.emit();

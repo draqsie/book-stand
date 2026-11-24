@@ -137,11 +137,13 @@ Varsayılan dal `main`. Örneğin `yayin` dalından yayımlamak için:
 ## 7. Apple Pencil ve iPad Safari sınırları
 
 - **Apple'ın yerel PencilKit araç paleti PWA'larda kullanılamaz.** book-stand, tarayıcının Pointer Events
-  desteğiyle kendi sade araç çubuğunu kullanır: Gezin, Kalem, Vurgula, Silgi, Soru seç, renkler, kalınlık,
+  desteğiyle kendi sade araç çubuğunu kullanır: Gezin, Kalem, Vurgula, Silgi (nesne silgisi: çizginin tamamını;
+  piksel silgisi: yalnızca üzerinden geçilen yeri siler), Soru seç, renkler, kalınlık,
   Geri al. Uygulama yerel Apple paletini kullanıyormuş gibi davranmaz.
 - Safari kalem basıncını bildirdiğinde çizgi kalınlığı basınca göre değişir.
 - Apple Pencil ilk kullanıldığında **parmakla çizim** kapanır: kalem yazar, parmak sayfayı kaydırır (avuç içi
-  çizmez). Araç çubuğundaki “Parmak” düğmesiyle değiştirilebilir.
+  çizmez). Bu modda parmakla kaydırma tarayıcının kendi akıcı kaydırmasıyla yapılır. Araç çubuğundaki
+  “Parmak” düğmesiyle değiştirilebilir.
 - Desteklenmeyenler: kalemin çift dokunma/sıkma hareketleri, PencilKit şekil tanıma ve el yazısı tanıma,
   Scribble ile PDF'e yazı yazma, arka planda eşitleme/bildirim, Dosyalar uygulamasındaki bir klasöre
   otomatik kayıt.
@@ -162,7 +164,7 @@ index.html, manifest.webmanifest, sw.js   Uygulama kabuğu, PWA manifesti, servi
 css/app.css                               Temalar ve arayüz
 js/                                       Uygulama modülleri (views/ ekranlar)
 vendor/pdfjs/                             PDF.js (değiştirilmeden kopyalandı)
-icons/                                    Uygulama simgeleri (icon.svg kaynak)
+icons/                                    Uygulama simgeleri (kaynak: icon-full.svg, üretmek için: npm run icons)
 tools/                                    Yerel sunucu, yayın hazırlama/denetim, simge üretimi
 .github/workflows/pages.yml               GitHub Pages dağıtımı
 ```

@@ -2,6 +2,7 @@
 // bu çubuk web standartlarıyla yapılmış kendi araç çubuğumuzdur.)
 import { h, icon } from './ui.js';
 import { getSettings, setSettings } from './settings.js';
+import { ERASER_SIZES } from './ink.js';
 
 export const PEN_COLORS = [
   ['#2b2b2b', 'Siyah'], ['#2f5fb3', 'Mavi'], ['#c0392b', 'Kırmızı'], ['#2e8b57', 'Yeşil'], ['#8e44ad', 'Mor'], ['#e67e22', 'Turuncu'],
@@ -30,13 +31,21 @@ export function createToolbar(ctrl, { select = false, extra = [] } = {}) {
     h('button', { type: 'button', class: 'size', 'aria-label': `${label} uç`, title: `${label} uç`, dataset: { size: s }, onclick: () => ctrl.setPen(null, s) },
       h('span', { class: 'dot', style: { width: `${4 + s * 3}px`, height: `${4 + s * 3}px` } }))));
 
+  // Silgi seçenekleri: nesne silgisi (çizginin tamamını siler) / piksel silgisi (yalnızca dokunduğu yeri siler)
+  const eraserModes = h('div', { class: 'tb-group seg', role: 'radiogroup', 'aria-label': 'Silgi türü' },
+    [['object', 'Nesne', 'Dokunduğun çizginin tamamını siler'], ['pixel', 'Piksel', 'Yalnızca üzerinden geçtiğin yeri siler']].map(([m, label, tip]) =>
+      h('button', { type: 'button', class: 'seg-btn', role: 'radio', title: tip, dataset: { mode: m }, onclick: () => ctrl.setEraser(m) }, label)));
+  const eraserSizes = h('div', { class: 'tb-group sizes' }, ERASER_SIZES.map((s, i) =>
+    h('button', { type: 'button', class: 'size', 'aria-label': `Silgi boyu ${i + 1}`, title: ['Küçük', 'Orta', 'Büyük'][i] + ' silgi', dataset: { esize: s }, onclick: () => ctrl.setEraser(null, s) },
+      h('span', { class: 'dot ring', style: { width: `${8 + i * 7}px`, height: `${8 + i * 7}px` } }))));
+
   const undoBtn = h('button', { type: 'button', class: 'tool', 'aria-label': 'Geri al', title: 'Geri al', onclick: () => ctrl.undo() }, icon('undo'), h('span', { class: 'tool-label' }, 'Geri al'));
   const fingerBtn = h('button', {
     type: 'button', class: 'tool finger', title: 'Parmakla çizim',
     onclick: () => { setSettings({ fingerDraws: !getSettings().fingerDraws }); ctrl.emit(); },
   }, icon('finger'), h('span', { class: 'tool-label' }));
 
-  bar.append(tools, h('div', { class: 'tb-sep' }), swatches, sizes, h('div', { class: 'tb-sep' }), undoBtn, fingerBtn, ...extra);
+  bar.append(tools, h('div', { class: 'tb-sep' }), swatches, sizes, eraserModes, eraserSizes, h('div', { class: 'tb-sep' }), undoBtn, fingerBtn, ...extra);
 
   const render = () => {
     bar.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === ctrl.tool));
@@ -51,6 +60,11 @@ export function createToolbar(ctrl, { select = false, extra = [] } = {}) {
         onclick: () => (isPen ? ctrl.setPen(c) : ctrl.setHl(c)),
       })));
     }
+    const isEr = ctrl.tool === 'eraser';
+    eraserModes.hidden = !isEr;
+    eraserSizes.hidden = !(isEr && ctrl.eraserMode === 'pixel');
+    eraserModes.querySelectorAll('.seg-btn').forEach((b) => { const on = b.dataset.mode === ctrl.eraserMode; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+    eraserSizes.querySelectorAll('.size').forEach((b) => b.classList.toggle('on', Number(b.dataset.esize) === ctrl.eraserSize));
     sizes.querySelectorAll('.size').forEach((b) => b.classList.toggle('on', Number(b.dataset.size) === ctrl.penSize));
     undoBtn.disabled = !ctrl.canUndo();
     const fd = getSettings().fingerDraws;

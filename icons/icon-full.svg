@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2c25"/>
+      <stop offset="1" stop-color="#1f1714"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.36" r="0.55">
+      <stop offset="0" stop-color="#f3c58c" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#f3c58c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f7ecdc"/>
+      <stop offset="1" stop-color="#fffaf2"/>
+    </linearGradient>
+    <linearGradient id="pageR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#efe1cc"/>
+      <stop offset="1" stop-color="#f7ecdc"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0a95c"/>
+      <stop offset="1" stop-color="#d9823a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+
+  <!-- Raf / stand -->
+  <rect x="118" y="366" width="276" height="16" rx="8" fill="#5b463a"/>
+
+  <!-- Ayraç şeridi (sayfaların arasından sarkar) -->
+  <path d="M282 318H314V428L298 412L282 428Z" fill="url(#ribbon)"/>
+
+  <!-- Sayfa kalınlığı -->
+  <path d="M256 186C214 160 164 154 116 162V352C164 344 214 350 256 376C298 350 348 344 396 352V162C348 154 298 160 256 186Z" fill="#cdb594"/>
+  <!-- Sol sayfa -->
+  <path d="M256 174C214 148 164 142 116 150V340C164 332 214 338 256 364Z" fill="url(#pageL)"/>
+  <!-- Sağ sayfa -->
+  <path d="M256 174C298 148 348 142 396 150V340C348 332 298 338 256 364Z" fill="url(#pageR)"/>
+  <!-- Sırt -->
+  <path d="M256 174V364" stroke="#c9ad88" stroke-width="3" stroke-linecap="round"/>
+</svg>

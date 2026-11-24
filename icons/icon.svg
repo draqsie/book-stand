@@ -1,23 +1,44 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <clipPath id="corner"><rect width="512" height="512" rx="114"/></clipPath>
+  <g clip-path="url(#corner)">
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#d4925f"/>
-      <stop offset="1" stop-color="#a95f33"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a2c25"/>
+      <stop offset="1" stop-color="#1f1714"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.36" r="0.55">
+      <stop offset="0" stop-color="#f3c58c" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#f3c58c" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="pageL" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f7ecdc"/>
+      <stop offset="1" stop-color="#fffaf2"/>
+    </linearGradient>
+    <linearGradient id="pageR" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#efe1cc"/>
+      <stop offset="1" stop-color="#f7ecdc"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0a95c"/>
+      <stop offset="1" stop-color="#d9823a"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <path d="M256 168C210 143 160 138 116 148V340C160 330 210 335 256 360Z" fill="#fffaf3"/>
-  <path d="M256 168C302 143 352 138 396 148V340C352 330 302 335 256 360Z" fill="#f4e6d4"/>
-  <g stroke="#d9a77d" stroke-width="9" stroke-linecap="round" fill="none">
-    <path d="M150 200C180 194 210 198 232 208"/>
-    <path d="M150 236C180 230 210 234 232 244"/>
-    <path d="M150 272C180 266 210 270 232 280"/>
-    <path d="M280 208C302 198 332 194 362 200"/>
-    <path d="M280 244C302 234 332 230 362 236"/>
-  </g>
-  <rect x="100" y="350" width="312" height="24" rx="12" fill="#5a3520"/>
-  <g stroke="#5a3520" stroke-width="20" stroke-linecap="round">
-    <path d="M182 376L154 430"/>
-    <path d="M330 376L358 430"/>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+
+  <!-- Raf / stand -->
+  <rect x="118" y="366" width="276" height="16" rx="8" fill="#5b463a"/>
+
+  <!-- Ayraç şeridi (sayfaların arasından sarkar) -->
+  <path d="M282 318H314V428L298 412L282 428Z" fill="url(#ribbon)"/>
+
+  <!-- Sayfa kalınlığı -->
+  <path d="M256 186C214 160 164 154 116 162V352C164 344 214 350 256 376C298 350 348 344 396 352V162C348 154 298 160 256 186Z" fill="#cdb594"/>
+  <!-- Sol sayfa -->
+  <path d="M256 174C214 148 164 142 116 150V340C164 332 214 338 256 364Z" fill="url(#pageL)"/>
+  <!-- Sağ sayfa -->
+  <path d="M256 174C298 148 348 142 396 150V340C348 332 298 338 256 364Z" fill="url(#pageR)"/>
+  <!-- Sırt -->
+  <path d="M256 174V364" stroke="#c9ad88" stroke-width="3" stroke-linecap="round"/>
   </g>
 </svg>

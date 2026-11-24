@@ -174,6 +174,8 @@ export async function renderViewer(main, { bookId, page: targetPage, rect: targe
     pumping = true;
     try {
       while (!destroyed) {
+        // Kalemle yazarken PDF çizimini beklet: çizgi takılmadan akar.
+        while (ctrl.active && !destroyed) await new Promise((r) => setTimeout(r, 80));
         const next = P.filter((p) => p && p.want && p.rendered !== zoomVersion).sort((a, b) => Math.abs(a.n - current) - Math.abs(b.n - current))[0];
         if (!next) break;
         await renderPage(next);
@@ -193,7 +195,7 @@ export async function renderViewer(main, { bookId, page: targetPage, rect: targe
       canvas.className = 'pdf-canvas';
       canvas.width = Math.floor(vp.width);
       canvas.height = Math.floor(vp.height);
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { alpha: false }); // opak tuval: daha hızlı birleştirme
       p.task = page.render({ canvasContext: ctx, viewport: vp });
       await p.task.promise;
       p.task = null;
@@ -548,7 +550,7 @@ export async function renderViewer(main, { bookId, page: targetPage, rect: targe
     window.removeEventListener('resize', onResize);
     io.disconnect();
     for (let i = 1; i <= n; i++) release(P[i]);
-    ctrl.hideLive();
+    ctrl.destroy();
     doc.destroy();
   };
 }
